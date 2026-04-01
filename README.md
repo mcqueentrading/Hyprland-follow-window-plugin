@@ -4,6 +4,12 @@ A Hyprland plugin that lets marked windows follow workspace changes.
 
 This version uses Hyprland main-thread workspace events rather than a background polling thread.
 
+## Demo
+
+<p align="center">
+  <img src="./demo.gif" alt="Follow Window demo" />
+</p>
+
 ## Features
 
 - Mark the focused window to follow workspace changes
@@ -34,12 +40,6 @@ bind = $mainMod CTRL SHIFT, G, plugin:follow:clearallfollowwindows
 ```ini
 plugin:follow:mute_notifications = 1
 ```
-
-## Demo
-
-Demo video:
-
-- [demo.mp4](./demo.mp4)
 
 ## Build
 
