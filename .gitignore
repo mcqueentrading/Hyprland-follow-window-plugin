@@ -1,0 +1,9 @@
+hyprland-follow-window.so
+Hyprland/
+build/
+*.o
+*.so
+*.a
+*.out
+*.log
+.DS_Store
