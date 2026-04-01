@@ -35,6 +35,12 @@ bind = $mainMod CTRL SHIFT, G, plugin:follow:clearallfollowwindows
 plugin:follow:mute_notifications = 1
 ```
 
+## Demo
+
+Demo video:
+
+- [demo.mp4](./demo.mp4)
+
 ## Build
 
 Build against a Hyprland source tree that matches your installed Hyprland version.
