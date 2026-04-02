@@ -2,12 +2,13 @@
 
 #include <src/plugins/PluginAPI.hpp>
 #include <src/plugins/HookSystem.hpp>
+#include <src/managers/KeybindManager.hpp>
 
 #include <hyprutils/signal/Listener.hpp>
 
-#include <string>
-#include <unordered_set>
+#include <functional>
+#include <vector>
 
 inline HANDLE PHANDLE = nullptr;
-inline std::unordered_set<std::string> g_markedWindowKeys;
-inline Hyprutils::Signal::CHyprSignalListener g_workspaceActiveListener;
+inline std::vector<PHLWINDOWREF> g_markedWindows;
+inline std::function<SDispatchResult(std::string)> g_originalWorkspaceDispatcher;
