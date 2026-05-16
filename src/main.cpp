@@ -13,6 +13,10 @@
 #include <format>
 #include <string>
 
+extern "C" {
+#include <lua.h>
+}
+
 static bool notificationsMuted() {
     const auto* value = HyprlandAPI::getConfigValue(PHANDLE, "plugin:follow:mute_notifications");
     if (!value)
@@ -109,33 +113,41 @@ static PHLWORKSPACE resolveTargetWorkspaceForChange(const std::string& args) {
     if (workspaceIsCurrent && (!explicitPrevious || previousWorkspace.id == -1))
         return nullptr;
 
-    auto targetWorkspace = g_pCompositor->getWorkspaceByID(workspaceIsCurrent ? previousWorkspace.id : workspaceToChangeTo);
-    if (!targetWorkspace) {
-        targetWorkspace = g_pCompositor->createNewWorkspace(workspaceIsCurrent ? previousWorkspace.id : workspaceToChangeTo, monitor->m_id,
-            workspaceIsCurrent ? previousWorkspace.name : workspaceName);
+    if (workspaceIsCurrent && explicitPrevious && previousWorkspace.id != -1) {
+        if (const auto previousResolved = g_pCompositor->getWorkspaceByID(previousWorkspace.id); previousResolved)
+            return previousResolved;
     }
 
-    return targetWorkspace;
+    if (const auto existing = g_pCompositor->getWorkspaceByID(workspaceToChangeTo); existing)
+        return existing;
+
+    return g_pCompositor->createNewWorkspace(workspaceToChangeTo, monitor.lock(), workspaceName, isAutoID);
 }
 
 static SDispatchResult followAwareWorkspace(std::string args) {
-    if (const auto targetWorkspace = resolveTargetWorkspaceForChange(args); targetWorkspace && !targetWorkspace->m_isSpecialWorkspace)
-        moveMarkedFollowWindowsToWorkspace(targetWorkspace);
+    const auto targetWorkspace = resolveTargetWorkspaceForChange(args);
+    if (!targetWorkspace)
+        return {.success = false, .error = "Could not resolve target workspace"};
+
+    moveMarkedFollowWindowsToWorkspace(targetWorkspace);
 
     if (!g_originalWorkspaceDispatcher)
-        return {.success = false, .error = "Original workspace dispatcher missing"};
+        return {.success = false, .error = "Original workspace dispatcher unavailable"};
 
-    return g_originalWorkspaceDispatcher(std::move(args));
+    return g_originalWorkspaceDispatcher(args);
 }
 
 static bool installWorkspaceDispatcherOverride() {
-    const auto it = g_pKeybindManager->m_dispatchers.find("workspace");
-    if (it == g_pKeybindManager->m_dispatchers.end()) {
-        notify("workspace dispatcher not found", CHyprColor{0.95, 0.45, 0.2, 1.0}, 3500);
+    if (!g_pKeybindManager)
         return false;
-    }
 
-    g_originalWorkspaceDispatcher = it->second;
+    const auto workspaceDispatcherIt = g_pKeybindManager->m_dispatchers.find("workspace");
+    if (workspaceDispatcherIt == g_pKeybindManager->m_dispatchers.end())
+        return false;
+
+    if (!g_originalWorkspaceDispatcher)
+        g_originalWorkspaceDispatcher = workspaceDispatcherIt->second;
+
     if (!g_originalWorkspaceDispatcher) {
         notify("original workspace dispatcher missing", CHyprColor{0.95, 0.45, 0.2, 1.0}, 3500);
         return false;
@@ -187,6 +199,30 @@ static SDispatchResult clearAllFollowWindows(std::string) {
     return {};
 }
 
+static int luaMarkFollowWindow(lua_State*) {
+    markFollowWindow("");
+    return 0;
+}
+
+static int luaClearFollowWindow(lua_State*) {
+    clearFollowWindow("");
+    return 0;
+}
+
+static int luaClearAllFollowWindows(lua_State*) {
+    clearAllFollowWindows("");
+    return 0;
+}
+
+static int luaFollowWorkspace(lua_State* L) {
+    if (!lua_isnumber(L, 1))
+        return 0;
+
+    const auto workspace = std::to_string(static_cast<int>(lua_tonumber(L, 1)));
+    followAwareWorkspace(workspace);
+    return 0;
+}
+
 APICALL EXPORT std::string PLUGIN_API_VERSION() {
     return HYPRLAND_API_VERSION;
 }
@@ -198,12 +234,16 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     HyprlandAPI::addDispatcherV2(PHANDLE, "plugin:follow:markfollowwindow", ::markFollowWindow);
     HyprlandAPI::addDispatcherV2(PHANDLE, "plugin:follow:clearfollowwindow", ::clearFollowWindow);
     HyprlandAPI::addDispatcherV2(PHANDLE, "plugin:follow:clearallfollowwindows", ::clearAllFollowWindows);
+    HyprlandAPI::addLuaFunction(PHANDLE, "follow", "mark", ::luaMarkFollowWindow);
+    HyprlandAPI::addLuaFunction(PHANDLE, "follow", "clear", ::luaClearFollowWindow);
+    HyprlandAPI::addLuaFunction(PHANDLE, "follow", "clear_all", ::luaClearAllFollowWindows);
+    HyprlandAPI::addLuaFunction(PHANDLE, "follow", "workspace", ::luaFollowWorkspace);
 
     const bool hookOk = installWorkspaceDispatcherOverride();
     notify(hookOk ? "Follow-window plugin loaded with workspace dispatcher override" : "Follow-window plugin loaded, but workspace override failed",
         hookOk ? CHyprColor{0.3, 0.9, 0.55, 1.0} : CHyprColor{0.95, 0.45, 0.2, 1.0}, 5000);
 
-    return {"hyprland-follow-window", "Follow marked windows across workspace changes", "George McQueen", "0.1.0"};
+    return {"hyprland-follow-window", "Follow marked windows across workspace changes", "Toni McQueen", "0.55.0-lua"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
