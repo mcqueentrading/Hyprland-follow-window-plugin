@@ -1,0 +1,36 @@
+-- Minimal 0.55 Lua integration snippet for hyprland-follow-window.
+-- Assumes the plugin .so is installed at ~/.config/hypr/plugins/hyprland-follow-window.so
+
+local mainMod = "SUPER"
+
+hl.plugin.load(os.getenv("HOME") .. "/.config/hypr/plugins/hyprland-follow-window.so")
+
+hl.bind(mainMod .. " + G", function()
+    if hl.plugin and hl.plugin.follow and hl.plugin.follow.mark then
+        hl.plugin.follow.mark()
+    end
+end)
+
+hl.bind(mainMod .. " + SHIFT + G", function()
+    if hl.plugin and hl.plugin.follow and hl.plugin.follow.clear then
+        hl.plugin.follow.clear()
+    end
+end)
+
+hl.bind(mainMod .. " + CTRL + SHIFT + G", function()
+    if hl.plugin and hl.plugin.follow and hl.plugin.follow.clear_all then
+        hl.plugin.follow.clear_all()
+    end
+end)
+
+for i = 1, 10 do
+    local key = i % 10
+    hl.bind(mainMod .. " + " .. key, function()
+        if hl.plugin and hl.plugin.follow and hl.plugin.follow.workspace then
+            hl.plugin.follow.workspace(i)
+        else
+            hl.dispatch(hl.dsp.focus({ workspace = i }))
+        end
+    end)
+    hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i }))
+end
