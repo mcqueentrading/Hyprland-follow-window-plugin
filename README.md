@@ -1,72 +1,50 @@
-# Hyprland Follow Window Plugin
+# hyprland-follow-window for Hyprland 0.55 (Lua integration)
 
-A Hyprland plugin that lets marked windows follow workspace changes.
+This is the Git-exportable `0.55/lua` package for the working follow-window implementation.
 
-This folder contains the current shareable source snapshot and prebuilt binary for the dispatcher-override version.
+It uses a small Hyprland plugin for the compositor-internal hook that Lua alone does not expose:
 
-## Current Behavior
+- overrides the `workspace` dispatcher early
+- moves marked windows with `g_pCompositor->moveWindowToWorkspaceSafe(...)`
+- exports Lua functions under `hl.plugin.follow.*`
 
-- plugin loads cleanly
-- custom follow-window dispatchers work
-- marked windows follow workspace changes
-- no background polling thread
-- no `hyprctl` shell calls
-- no late `workspace.active` callback path
-
-The current implementation overrides Hyprland's `workspace` dispatcher early in the pipeline, moves marked windows first, then calls the original dispatcher.
-
-## Files
+## What this package contains
 
 - `src/main.cpp`
 - `src/globals.hpp`
 - `Makefile`
 - `build.sh`
-- `hyprland-follow-window.so`
-- `demo.gif`
-- `demo.mp4`
+- `examples/hyprland.lua.snippet.lua`
 
-## Demo
+It intentionally does **not** include:
 
-![Follow Window Demo](./demo.gif)
+- local absolute machine paths
+- local binaries from your working directory
+- built `.so` artifacts committed for one specific machine
+- your personal Hyprland config
 
-[Watch the MP4 demo](./demo.mp4)
+## Lua API exported by the plugin
 
-## What The Plugin Adds
+After loading the plugin in `hyprland.lua`, these functions are available:
 
-Custom dispatchers:
-
-- `plugin:follow:markfollowwindow`
-- `plugin:follow:clearfollowwindow`
-- `plugin:follow:clearallfollowwindows`
-
-Optional config:
-
-- `plugin:follow:mute_notifications = 1`
-
-Example config:
-
-```ini
-plugin = /home/unknown/.config/hypr/plugins/hyprland-follow-window.so
-plugin:follow:mute_notifications = 0
-
-bind = $mainMod, G, plugin:follow:markfollowwindow
-bind = $mainMod SHIFT, G, plugin:follow:clearfollowwindow
-bind = $mainMod CTRL SHIFT, G, plugin:follow:clearallfollowwindows
-```
-
-To mute plugin notifications:
-
-```ini
-plugin:follow:mute_notifications = 1
-```
+- `hl.plugin.follow.mark()`
+- `hl.plugin.follow.clear()`
+- `hl.plugin.follow.clear_all()`
+- `hl.plugin.follow.workspace(i)`
 
 ## Build
 
-Build against a Hyprland source tree:
+Build against a Hyprland source tree that matches the exact installed Hyprland version.
+
+For the version this package was built against:
+
+- Hyprland `0.55.0`
+
+Example:
 
 ```bash
 chmod +x build.sh
-HYPRLAND_SRC="/path/to/Hyprland" ./build.sh
+HYPRLAND_SRC="/path/to/Hyprland-0.55.0" ./build.sh
 ```
 
 This produces:
@@ -80,37 +58,35 @@ mkdir -p ~/.config/hypr/plugins
 cp hyprland-follow-window.so ~/.config/hypr/plugins/hyprland-follow-window.so
 ```
 
-Then load it from `hyprland.conf` and restart Hyprland.
+Then load it from `hyprland.lua`.
 
-## Prebuilt Binary
+## Minimal Lua integration
 
-This folder also includes:
+See:
 
-- `hyprland-follow-window.so`
+- `examples/hyprland.lua.snippet.lua`
 
-You can copy that directly if you are running the same Hyprland build this was tested on:
+The important detail is that normal workspace binds need to call:
 
-- Hyprland `v0.54.3`
-- commit `521ece463c4a9d3d128670688a34756805a4328f`
+```lua
+hl.plugin.follow.workspace(i)
+```
 
-Otherwise, rebuild the plugin against your own matching Hyprland source tree.
+when follow-window behavior is desired.
 
-## Implementation Notes
+## Why this is not pure Lua
 
-The current version:
+Lua 0.55 was enough for:
 
-- stores marked windows as `PHLWINDOWREF`
-- uses direct `PHLWORKSPACE` and compositor APIs
-- moves windows through `g_pCompositor->moveWindowToWorkspaceSafe(...)`
-- overrides `g_pKeybindManager->m_dispatchers["workspace"]`
-- restores the original workspace dispatcher on unload
+- binds
+- notifications
+- config logic
+- direct plugin Lua function calls
 
-## Status
+It was **not** enough for the critical behavior by itself:
 
-This is the current exported version.
+- early `workspace` dispatcher interception
+- native workspace move timing before the switch
+- `moveWindowToWorkspaceSafe(...)`
 
-Known profile:
-
-- works for normal keybind-driven workspace changes using the `workspace` dispatcher
-- designed specifically to move earlier than the fullscreen stack
-- still different from the older direct Hyprland core patch, which remains the strictest implementation
+That is why this export keeps a small plugin backend and a Lua-facing API instead of pretending the feature is fully implementable in pure Lua.
