@@ -1,9 +1,9 @@
 -- Minimal 0.55 Lua integration snippet for hyprland-follow-window.
--- Assumes the plugin .so is installed at ~/.config/hypr/plugins/hyprland-follow-window.so
+-- Assumes the plugin .so is installed at ~/.config/hypr/plugins/hyprland-follow-window-v055-lua.so
 
 local mainMod = "SUPER"
 
-hl.plugin.load(os.getenv("HOME") .. "/.config/hypr/plugins/hyprland-follow-window.so")
+hl.plugin.load(os.getenv("HOME") .. "/.config/hypr/plugins/hyprland-follow-window-v055-lua.so")
 
 hl.bind(mainMod .. " + G", function()
     if hl.plugin and hl.plugin.follow and hl.plugin.follow.mark then

@@ -1,44 +1,71 @@
-# hyprland-follow-window for Hyprland 0.55 (Lua integration)
+# Hyprland Follow Window for Hyprland 0.55
 
-This is the Git-exportable `0.55/lua` package for the working follow-window implementation.
+Follow marked windows across workspace changes in Hyprland `0.55.x`, with Lua-friendly integration.
 
-It uses a small Hyprland plugin for the compositor-internal hook that Lua alone does not expose:
+![Demo](demo.gif)
 
-- overrides the `workspace` dispatcher early
-- moves marked windows with `g_pCompositor->moveWindowToWorkspaceSafe(...)`
-- exports Lua functions under `hl.plugin.follow.*`
+## What this does
 
-## What this package contains
+This project lets you:
 
-- `src/main.cpp`
-- `src/globals.hpp`
-- `Makefile`
-- `build.sh`
-- `examples/hyprland.lua.snippet.lua`
+- mark the focused window as a follow-window
+- switch workspaces normally
+- move the marked window to the target workspace before the workspace switch completes
+- clear the focused marked window
+- clear all marked windows
 
-It intentionally does **not** include:
+This is aimed at users running:
 
-- local absolute machine paths
-- local binaries from your working directory
-- built `.so` artifacts committed for one specific machine
-- your personal Hyprland config
+- Hyprland `0.55.x`
+- `hyprland.lua`
 
-## Lua API exported by the plugin
+## Why this exists
 
-After loading the plugin in `hyprland.lua`, these functions are available:
+Pure Lua was enough for:
+
+- binds
+- notifications
+- config logic
+- direct plugin Lua function calls
+
+Pure Lua was **not** enough for the part that actually matters here:
+
+- intercepting the `workspace` dispatcher early
+- moving windows at the right point in the switch sequence
+- using Hyprland internals like `moveWindowToWorkspaceSafe(...)`
+
+So this repo uses a small plugin backend and exposes a Lua-facing API:
 
 - `hl.plugin.follow.mark()`
 - `hl.plugin.follow.clear()`
 - `hl.plugin.follow.clear_all()`
 - `hl.plugin.follow.workspace(i)`
 
-## Build
+## Repo contents
 
-Build against a Hyprland source tree that matches the exact installed Hyprland version.
+- `src/main.cpp`
+- `src/globals.hpp`
+- `Makefile`
+- `build.sh`
+- `hyprland.lua-snippet`
+- `hyprland-follow-window-v055-lua.so`
+- `demo.gif`
 
-For the version this package was built against:
+## Prebuilt binary
 
-- Hyprland `0.55.0`
+This repo includes a prebuilt plugin binary:
+
+- `hyprland-follow-window-v055-lua.so`
+
+Important:
+
+- it is intended for Hyprland `0.55.x`
+- plugins are not ABI-stable across Hyprland versions
+- if your build does not match, rebuild it from source
+
+## Build from source
+
+Build against a Hyprland source tree that matches the exact Hyprland version you are running.
 
 Example:
 
@@ -53,40 +80,94 @@ This produces:
 
 ## Install
 
+Create the plugin directory if needed:
+
 ```bash
 mkdir -p ~/.config/hypr/plugins
-cp hyprland-follow-window.so ~/.config/hypr/plugins/hyprland-follow-window.so
 ```
 
-Then load it from `hyprland.lua`.
+If you want to use the prebuilt binary:
 
-## Minimal Lua integration
+```bash
+cp hyprland-follow-window-v055-lua.so ~/.config/hypr/plugins/hyprland-follow-window-v055-lua.so
+```
 
-See:
+If you built from source:
 
-- `examples/hyprland.lua.snippet.lua`
+```bash
+cp hyprland-follow-window.so ~/.config/hypr/plugins/hyprland-follow-window-v055-lua.so
+```
 
-The important detail is that normal workspace binds need to call:
+The install target name is kept consistent so the Lua snippet can load one stable filename.
+
+## Lua integration
+
+This repo ships a minimal snippet:
+
+- `hyprland.lua-snippet`
+
+Paste the relevant parts into your:
+
+- `~/.config/hypr/hyprland.lua`
+
+Minimal example:
 
 ```lua
-hl.plugin.follow.workspace(i)
+local mainMod = "SUPER"
+
+hl.plugin.load(os.getenv("HOME") .. "/.config/hypr/plugins/hyprland-follow-window-v055-lua.so")
+
+hl.bind(mainMod .. " + G", function()
+    if hl.plugin and hl.plugin.follow and hl.plugin.follow.mark then
+        hl.plugin.follow.mark()
+    end
+end)
+
+hl.bind(mainMod .. " + SHIFT + G", function()
+    if hl.plugin and hl.plugin.follow and hl.plugin.follow.clear then
+        hl.plugin.follow.clear()
+    end
+end)
+
+hl.bind(mainMod .. " + CTRL + SHIFT + G", function()
+    if hl.plugin and hl.plugin.follow and hl.plugin.follow.clear_all then
+        hl.plugin.follow.clear_all()
+    end
+end)
+
+for i = 1, 10 do
+    local key = i % 10
+    hl.bind(mainMod .. " + " .. key, function()
+        if hl.plugin and hl.plugin.follow and hl.plugin.follow.workspace then
+            hl.plugin.follow.workspace(i)
+        else
+            hl.dispatch(hl.dsp.focus({ workspace = i }))
+        end
+    end)
+    hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i }))
+end
 ```
 
-when follow-window behavior is desired.
+## Default behavior
 
-## Why this is not pure Lua
+- `SUPER + G`
+  - mark focused window
+- `SUPER + SHIFT + G`
+  - clear focused marked window
+- `SUPER + CTRL + SHIFT + G`
+  - clear all marked windows
+- `SUPER + 1..0`
+  - if a window is marked, move it first and then switch workspace
+  - if nothing is marked, behave like a normal workspace switch
 
-Lua 0.55 was enough for:
+## Notes
 
-- binds
-- notifications
-- config logic
-- direct plugin Lua function calls
+- the plugin also registers legacy dispatchers internally:
+  - `plugin:follow:markfollowwindow`
+  - `plugin:follow:clearfollowwindow`
+  - `plugin:follow:clearallfollowwindows`
+- for Hyprland `0.55` Lua configs, calling the exported Lua functions directly is the safer path
 
-It was **not** enough for the critical behavior by itself:
+## Author
 
-- early `workspace` dispatcher interception
-- native workspace move timing before the switch
-- `moveWindowToWorkspaceSafe(...)`
-
-That is why this export keeps a small plugin backend and a Lua-facing API instead of pretending the feature is fully implementable in pure Lua.
+- Toni McQueen
